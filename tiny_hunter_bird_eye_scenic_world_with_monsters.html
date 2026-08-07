@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Tiny Hunter — Scenic Wild Lands with Monsters</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101419;font-family:Arial,sans-serif;touch-action:none;user-select:none}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#hud{position:fixed;inset:0;pointer-events:none;color:#fff}
+#stats{position:absolute;top:max(10px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));width:220px;background:rgba(12,15,18,.72);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:10px 12px;backdrop-filter:blur(5px)}
+.row{display:flex;justify-content:space-between;gap:10px;font-size:13px;margin:2px 0}
+.bar{height:10px;background:rgba(0,0,0,.55);border-radius:7px;overflow:hidden;margin:4px 0 8px}
+.fill{height:100%;width:100%}
+#hpFill{background:linear-gradient(90deg,#b6202f,#ef5360)}
+#staminaFill{background:linear-gradient(90deg,#3d8d4e,#79d363)}
+#xpFill{background:linear-gradient(90deg,#4a71c8,#87a7ff)}
+#topBtns{position:absolute;top:max(10px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right));display:flex;flex-wrap:wrap;justify-content:flex-end;max-width:430px;gap:6px;pointer-events:auto}
+.uiBtn{border:1px solid rgba(255,255,255,.2);background:rgba(15,20,25,.8);color:white;border-radius:12px;padding:10px 13px;font-weight:800}
+#message{position:absolute;top:110px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.68);padding:8px 14px;border-radius:12px;font-weight:800;opacity:0;transition:opacity .18s}
+#campLabel{position:absolute;top:150px;left:50%;transform:translateX(-50%);font-size:14px;font-weight:800;text-shadow:0 2px 7px #000}
+#joystick{position:absolute;left:max(18px,env(safe-area-inset-left));bottom:max(20px,env(safe-area-inset-bottom));width:160px;height:160px;border-radius:50%;background:rgba(10,15,18,.30);border:2px solid rgba(255,255,255,.23);pointer-events:auto}
+#stick{position:absolute;left:47px;top:47px;width:66px;height:66px;border-radius:50%;background:rgba(255,255,255,.72);border:3px solid rgba(0,0,0,.28)}
+#actions{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(20px,env(safe-area-inset-bottom));display:grid;grid-template-columns:82px 82px;grid-template-rows:72px 72px;gap:10px;pointer-events:auto}
+.act{border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:18px;font-weight:900;font-size:14px;touch-action:none}
+#attack{grid-row:1/3;grid-column:2;background:#b8353f}
+#roll{background:#4768c5}
+#block{background:#43825d}
+#shrineHint{position:absolute;bottom:190px;left:50%;transform:translateX(-50%);background:rgba(24,35,44,.84);border:1px solid rgba(255,255,255,.18);padding:10px 14px;border-radius:14px;font-weight:800;display:none}
+#crosshair{position:absolute;left:50%;top:43%;width:8px;height:8px;border:1px solid rgba(255,255,255,.65);border-radius:50%;transform:translate(-50%,-50%)}
+#inventoryModal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.68);z-index:30;pointer-events:auto;padding:18px}
+#inventoryCard{width:min(460px,94vw);max-height:80vh;overflow:auto;background:#151b20;border:1px solid rgba(255,255,255,.2);border-radius:18px;padding:18px;color:#fff}
+#inventoryCard h2{margin:0 0 8px}.invItem{padding:11px 0;border-top:1px solid rgba(255,255,255,.12);display:flex;justify-content:space-between;gap:12px}
+#closeInventory{width:100%;margin-top:14px;border:0;border-radius:11px;padding:12px;background:#46535f;color:white;font-weight:800}
+.equipBtn{border:0;border-radius:9px;padding:8px 10px;background:#3f617e;color:#fff;font-weight:800}
+@media(max-width:700px){#stats{width:190px}#joystick{width:150px;height:150px}#stick{left:42px;top:42px}#actions{grid-template-columns:76px 76px;grid-template-rows:68px 68px}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud">
+  <div id="stats">
+    <div class="row"><b>Level <span id="level">1</span></b><span>Heart upgrades <span id="heartCount">0</span></span></div>
+    <div class="row"><span>HP</span><span id="hpText">100 / 100</span></div>
+    <div class="bar"><div id="hpFill" class="fill"></div></div>
+    <div class="row"><span>Stamina</span><span id="staminaText">100 / 100</span></div>
+    <div class="bar"><div id="staminaFill" class="fill"></div></div>
+    <div class="row"><span>XP</span><span id="xpText">0 / 60</span></div>
+    <div class="bar"><div id="xpFill" class="fill"></div></div>
+    <div class="row"><span>Shrines</span><span id="shrineCount">0</span></div>
+    <div class="row"><span>Weapon</span><span id="equippedWeapon">Traveler Sword</span></div>
+    <div class="row"><span>Arrows</span><span id="arrowCount">20</span></div>
+  </div>
+  <div id="topBtns">
+    <button id="inventoryBtn" class="uiBtn" type="button">INVENTORY</button>
+    <button id="saveBtn" class="uiBtn" type="button">SAVE</button>
+    <button id="resetBtn" class="uiBtn" type="button">RESET</button>
+  </div>
+  <div id="message">Saved</div>
+  <div id="campLabel">THE WILD LANDS • MONSTER CAMPS</div>
+  
+  <div id="joystick"><div id="stick"></div></div>
+  <div id="actions">
+    <button id="roll" class="act" type="button">ROLL</button>
+    <button id="block" class="act" type="button">BLOCK</button>
+    <button id="attack" class="act" type="button">ATTACK</button>
+  </div>
+  <div id="shrineHint">Stay inside the shrine circle to complete it</div>
+</div>
+<div id="inventoryModal">
+  <div id="inventoryCard">
+    <h2>Inventory</h2>
+    <div class="invItem"><span>Traveler Sword</span><button class="equipBtn" id="equipSword" type="button">EQUIP</button></div>
+    <div class="invItem"><span>Wooden Bow</span><button class="equipBtn" id="equipWoodBow" type="button">EQUIP</button></div>
+    <div class="invItem"><span>Hunter Bow</span><button class="equipBtn" id="equipHunterBow" type="button">EQUIP</button></div>
+    <div class="invItem"><span>Knight Bow</span><button class="equipBtn" id="equipKnightBow" type="button">EQUIP</button></div>
+    <div class="invItem"><span>Healing Herbs</span><b id="herbCount">3</b></div>
+    <div class="invItem"><span>Ancient Fragments</span><b id="partCount">0</b></div>
+    <div class="invItem"><span>Shrine Relics</span><b id="relicCount">0</b></div>
+    <button id="closeInventory">CLOSE</button>
+  </div>
+</div>
+
+<script>
+(()=>{
+"use strict";
+if(!CanvasRenderingContext2D.prototype.roundRect){
+  CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){
+    r=Math.min(Number(r)||0,Math.abs(w)/2,Math.abs(h)/2);
+    this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);this.arcTo(x+w,y+h,x,y+h,r);
+    this.arcTo(x,y+h,x,y,r);this.arcTo(x,y,x+w,y,r);this.closePath();return this;
+  };
+}
+const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
+let vw=innerWidth,vh=innerHeight,dpr=Math.min(devicePixelRatio||1,2);
+function resize(){vw=innerWidth;vh=innerHeight;dpr=Math.min(devicePixelRatio||1,2);canvas.width=vw*dpr;canvas.height=vh*dpr;canvas.style.width=vw+"px";canvas.style.height=vh+"px";ctx.setTransform(dpr,0,0,dpr,0,0)}
+addEventListener("resize",resize);resize();
+
+const WORLD={w:200000,h:200000};
+const SAVE_KEY="tinyHunterBirdEyeScenicMonstersV1";
+const player={x:WORLD.w/2,y:WORLD.h/2,saveX:WORLD.w/2,saveY:WORLD.h/2,heading:0,speed:230,r:18,hp:100,maxHp:100,stamina:100,maxStamina:100,level:1,xp:0,heartUpgrades:0,staminaUpgrades:0,shrinesDone:0,herbs:3,monsterParts:0,weapon:"Traveler Sword",arrows:20,bows:["Wooden Bow","Hunter Bow","Knight Bow"],attackCd:0,attackTimer:0,attackStage:0,comboTimer:0,rollCd:0,rollTimer:0,block:false,invuln:0,shake:0};
+const input={x:0,y:0},camera={x:player.x,y:player.y};
+const monsterTypes=[
+{name:"Boklin",unlock:1,hp:180,damage:10,speed:52,r:20,color:"#6f8a51",hits:1,xp:16},
+{name:"Forest Fang",unlock:1,hp:210,damage:12,speed:64,r:20,color:"#68706d",hits:2,xp:19},
+{name:"Bandit",unlock:1,hp:260,damage:15,speed:57,r:21,color:"#765844",hits:2,xp:25},
+{name:"Iron Knight",unlock:1,hp:360,damage:19,speed:50,r:24,color:"#7b8389",hits:2,xp:36},
+{name:"Dual Raider",unlock:1,hp:330,damage:14,speed:63,r:22,color:"#66567e",hits:3,xp:40},
+{name:"Brute",unlock:1,hp:800,damage:27,speed:40,r:29,color:"#865743",hits:2,xp:58},
+{name:"Berserker",unlock:1,hp:500,damage:21,speed:58,r:27,color:"#8a3e42",hits:3,xp:66},
+{name:"Royal Champion",unlock:1,hp:800,damage:28,speed:53,r:31,color:"#9b793c",hits:4,xp:90}
+];
+const camps=[],monsters=[],shrines=[],scenery=[];
+function rand(a,b){return a+Math.random()*(b-a)}
+function dist(ax,ay,bx,by){return Math.hypot(ax-bx,ay-by)}
+function xpNeed(){return 60+Math.floor((player.level-1)*35+(player.level-1)*(player.level-1)*2.5)}
+function generateWorld(){
+  for(let i=0;i<60;i++){
+    const cx=rand(1800,WORLD.w-1800),cy=rand(1800,WORLD.h-1800),camp={x:cx,y:cy,r:310,name:["Broken Camp","Ash Camp","Forest Camp","Old Watch","Raider Camp"][i%5]};camps.push(camp);
+    const count=3+(i%5);
+    for(let j=0;j<count;j++){
+      const t=monsterTypes[(i+j)%monsterTypes.length],a=Math.random()*Math.PI*2,rr=80+Math.random()*170;
+      monsters.push({type:t,x:cx+Math.cos(a)*rr,y:cy+Math.sin(a)*rr,homeX:cx+Math.cos(a)*rr,homeY:cy+Math.sin(a)*rr,camp,hp:t.hp,maxHp:t.hp,active:false,dead:false,respawn:0,state:"idle",attackCd:rand(.4,1.4),windup:0,comboLeft:0,comboGap:0,hitFlash:0});
+    }
+  }
+  for(let i=0;i<30;i++)shrines.push({x:rand(2500,WORLD.w-2500),y:rand(2500,WORLD.h-2500),done:false,progress:0,index:i});
+  for(let i=0;i<1800;i++)scenery.push({x:rand(300,WORLD.w-300),y:rand(300,WORLD.h-300),kind:Math.random()<.52?"tree":Math.random()<.8?"rock":"ruin",s:rand(.7,1.45)});
+}
+generateWorld();
+
+function saveGame(show=true){
+  localStorage.setItem(SAVE_KEY,JSON.stringify({x:player.x,y:player.y,saveX:player.x,saveY:player.y,hp:player.hp,maxHp:player.maxHp,stamina:player.stamina,maxStamina:player.maxStamina,level:player.level,xp:player.xp,heartUpgrades:player.heartUpgrades,staminaUpgrades:player.staminaUpgrades,shrinesDone:player.shrinesDone,herbs:player.herbs,monsterParts:player.monsterParts,weapon:player.weapon,arrows:player.arrows,shrines:shrines.map(s=>s.done)}));
+  player.saveX=player.x;player.saveY=player.y;if(show)showMsg("Saved");
+}
+function loadGame(){try{const raw=localStorage.getItem(SAVE_KEY);if(!raw)return;const d=JSON.parse(raw);for(const k of ["x","y","saveX","saveY","hp","maxHp","stamina","maxStamina","level","xp","heartUpgrades","staminaUpgrades","shrinesDone","herbs","monsterParts","arrows"])if(Number.isFinite(d[k]))player[k]=d[k];if(typeof d.weapon==="string")player.weapon=d.weapon;if(Array.isArray(d.shrines))shrines.forEach((s,i)=>s.done=!!d.shrines[i])}catch(e){}}
+loadGame();setInterval(()=>saveGame(false),60000);
+let msgTimer=0;function showMsg(t){const e=document.getElementById("message");e.textContent=t;e.style.opacity="1";clearTimeout(msgTimer);msgTimer=setTimeout(()=>e.style.opacity="0",1300)}
+function gainXP(n){player.xp+=n;while(player.xp>=xpNeed()){player.xp-=xpNeed();player.level++;showMsg("LEVEL "+player.level)}}
+function updateActivation(){for(const m of monsters)m.active=dist(player.x,player.y,m.camp.x,m.camp.y)<1200}
+
+const joy=document.getElementById("joystick"),stick=document.getElementById("stick");
+let joyPointer=null;
+let joyTouch=null;
+
+function setJoyFromPoint(clientX,clientY){
+  const r=joy.getBoundingClientRect();
+  const cx=r.left+r.width/2,cy=r.top+r.height/2;
+  let dx=clientX-cx,dy=clientY-cy;
+  const max=r.width*.32;
+  const len=Math.hypot(dx,dy)||1;
+  if(len>max){dx=dx/len*max;dy=dy/len*max}
+  input.x=dx/max;
+  input.y=dy/max;
+  stick.style.transform=`translate(${dx}px,${dy}px)`;
+}
+function resetJoy(){
+  joyPointer=null;
+  joyTouch=null;
+  input.x=0;
+  input.y=0;
+  stick.style.transform="translate(0,0)";
+}
+
+// Pointer Events: works on modern iPad Safari and desktop.
+joy.addEventListener("pointerdown",e=>{
+  joyPointer=e.pointerId;
+  try{joy.setPointerCapture(e.pointerId)}catch(_){}
+  setJoyFromPoint(e.clientX,e.clientY);
+  e.preventDefault();
+});
+window.addEventListener("pointermove",e=>{
+  if(joyPointer===e.pointerId){
+    setJoyFromPoint(e.clientX,e.clientY);
+    e.preventDefault();
+  }
+},{passive:false});
+window.addEventListener("pointerup",e=>{
+  if(joyPointer===e.pointerId)resetJoy();
+});
+window.addEventListener("pointercancel",e=>{
+  if(joyPointer===e.pointerId)resetJoy();
+});
+
+// Touch fallback for Safari versions where pointer capture is unreliable.
+joy.addEventListener("touchstart",e=>{
+  if(joyPointer!==null || !e.changedTouches.length)return;
+  const t=e.changedTouches[0];
+  joyTouch=t.identifier;
+  setJoyFromPoint(t.clientX,t.clientY);
+  e.preventDefault();
+},{passive:false});
+window.addEventListener("touchmove",e=>{
+  if(joyTouch===null)return;
+  for(const t of e.changedTouches){
+    if(t.identifier===joyTouch){
+      setJoyFromPoint(t.clientX,t.clientY);
+      e.preventDefault();
+      break;
+    }
+  }
+},{passive:false});
+window.addEventListener("touchend",e=>{
+  if(joyTouch===null)return;
+  for(const t of e.changedTouches){
+    if(t.identifier===joyTouch){resetJoy();break}
+  }
+},{passive:false});
+window.addEventListener("touchcancel",()=>{if(joyTouch!==null)resetJoy()},{passive:false});
+
+function bindHold(el,down,up){
+  let touching=false;
+  el.addEventListener("touchstart",e=>{
+    touching=true;down();e.preventDefault();
+  },{passive:false});
+  el.addEventListener("touchend",e=>{
+    if(touching){touching=false;if(up)up();e.preventDefault()}
+  },{passive:false});
+  el.addEventListener("touchcancel",()=>{
+    if(touching){touching=false;if(up)up()}
+  },{passive:false});
+  el.addEventListener("mousedown",e=>{
+    if(touching)return;down();e.preventDefault();
+  });
+  el.addEventListener("mouseup",e=>{
+    if(touching)return;if(up)up();e.preventDefault();
+  });
+  el.addEventListener("mouseleave",()=>{
+    if(!touching&&up)up();
+  });
+}
+bindHold(document.getElementById("attack"),doAttack);bindHold(document.getElementById("roll"),doRoll);bindHold(document.getElementById("block"),()=>player.block=true,()=>player.block=false);
+const inventoryModal=document.getElementById("inventoryModal");
+document.getElementById("inventoryBtn").addEventListener("click",()=>{inventoryModal.style.display="flex";updateInventory()});
+document.getElementById("closeInventory").addEventListener("click",()=>inventoryModal.style.display="none");
+inventoryModal.addEventListener("click",e=>{if(e.target===inventoryModal)inventoryModal.style.display="none"});
+function updateInventory(){
+  document.getElementById("herbCount").textContent=player.herbs;
+  document.getElementById("partCount").textContent=player.monsterParts;
+  document.getElementById("relicCount").textContent=player.shrinesDone;
+  for(const [id,name] of [["equipSword","Traveler Sword"],["equipWoodBow","Wooden Bow"],["equipHunterBow","Hunter Bow"],["equipKnightBow","Knight Bow"]]){
+    document.getElementById(id).textContent=player.weapon===name?"EQUIPPED":"EQUIP";
+  }
+}
+
+document.getElementById("equipSword").addEventListener("click",()=>{player.weapon="Traveler Sword";updateInventory();updateHud();showMsg("Traveler Sword equipped")});
+document.getElementById("equipWoodBow").addEventListener("click",()=>{player.weapon="Wooden Bow";updateInventory();updateHud();showMsg("Wooden Bow equipped")});
+document.getElementById("equipHunterBow").addEventListener("click",()=>{player.weapon="Hunter Bow";updateInventory();updateHud();showMsg("Hunter Bow equipped")});
+document.getElementById("equipKnightBow").addEventListener("click",()=>{player.weapon="Knight Bow";updateInventory();updateHud();showMsg("Knight Bow equipped")});
+document.getElementById("saveBtn").addEventListener("click",()=>saveGame(true));document.getElementById("resetBtn").addEventListener("click",()=>{if(confirm("Reset progress?")){localStorage.removeItem(SAVE_KEY);location.reload()}});
+const keys={};addEventListener("keydown",e=>{keys[e.key.toLowerCase()]=1;if(e.code==="Space")doAttack();if(e.key==="Shift")doRoll();if(e.key.toLowerCase()==="b")player.block=true});addEventListener("keyup",e=>{keys[e.key.toLowerCase()]=0;if(e.key.toLowerCase()==="b")player.block=false});
+
+function doAttack(){
+  if(player.attackCd>0)return;
+
+  if(player.weapon.includes("Bow")){
+    if(player.arrows<=0){showMsg("No arrows");return}
+    player.arrows--;
+    player.attackCd=.55;
+    player.attackTimer=.18;
+
+    const bowDamage =
+      player.weapon==="Knight Bow" ? 24 :
+      player.weapon==="Hunter Bow" ? 19 : 15;
+
+    let target=null,best=9999;
+    for(const m of monsters){
+      if(!m.active||m.dead)continue;
+      const d=dist(player.x,player.y,m.x,m.y);
+      if(d>650)continue;
+      const ang=Math.atan2(m.y-player.y,m.x-player.x);
+      const da=Math.abs(Math.atan2(Math.sin(ang-player.heading),Math.cos(ang-player.heading)));
+      if(da<.42 && d<best){best=d;target=m}
+    }
+
+    if(target){
+      target.hp-=bowDamage;
+      target.hitFlash=.18;
+      player.shake=2;
+      if(target.hp<=0){
+        target.dead=true;
+        target.respawn=22;
+        gainXP(target.type.xp);
+        player.monsterParts+=1+(target.type.hp>=500?2:0);
+        if(Math.random()<.22)player.arrows+=3;
+        if(Math.random()<.14)player.herbs++;
+      }
+    }
+    return;
+  }
+
+  player.attackStage=player.comboTimer>0?(player.attackStage%3)+1:1;
+  player.comboTimer=.75;
+  player.attackCd=player.attackStage===3?.48:.31;
+  player.attackTimer=.22;
+
+  const base=8+player.level*.65;
+  const dmg=base*(player.attackStage===3?1.65:player.attackStage===2?1.2:1);
+  let hit=0;
+
+  for(const m of monsters){
+    if(!m.active||m.dead)continue;
+    const d=dist(player.x,player.y,m.x,m.y);
+    if(d>95+m.type.r)continue;
+    const ang=Math.atan2(m.y-player.y,m.x-player.x);
+    const da=Math.atan2(Math.sin(ang-player.heading),Math.cos(ang-player.heading));
+    if(Math.abs(da)<1.25){
+      m.hp-=dmg;
+      m.hitFlash=.16;
+      hit++;
+      const nx=(m.x-player.x)/(d||1),ny=(m.y-player.y)/(d||1);
+      m.x+=nx*(player.attackStage===3?32:15);
+      m.y+=ny*(player.attackStage===3?32:15);
+      if(m.hp<=0){
+        m.dead=true;
+        m.respawn=22;
+        gainXP(m.type.xp);
+        player.monsterParts+=1+(m.type.hp>=500?2:0);
+        if(Math.random()<.18)player.herbs++;
+        if(Math.random()<.20)player.arrows+=2;
+      }
+    }
+  }
+  if(hit)player.shake=player.attackStage===3?5:2;
+}
+function doRoll(){if(player.rollCd>0||player.stamina<26)return;player.stamina-=26;player.rollCd=.7;player.rollTimer=.32;player.invuln=.38}
+function hurtPlayer(n){if(player.invuln>0)return;if(player.block){if(player.stamina>=18){player.stamina-=18;n*=.18}else player.block=false}player.hp-=n;player.invuln=.5;player.shake=6;if(player.hp<=0){player.hp=player.maxHp;player.stamina=player.maxStamina;player.x=player.saveX;player.y=player.saveY;showMsg("Returned to last save")}}
+
+function updateShrines(dt){
+  let near=false;
+  for(const s of shrines){
+    if(s.done)continue;
+    const d=dist(player.x,player.y,s.x,s.y);
+    if(d<85){near=true;s.progress+=dt;if(s.progress>=2.2){s.done=true;s.progress=0;player.shrinesDone++;if(player.shrinesDone%2===1){player.maxHp+=20;player.hp=player.maxHp;player.heartUpgrades++;showMsg("Shrine complete: +1 Heart")}else{player.maxStamina+=20;player.stamina=player.maxStamina;player.staminaUpgrades++;showMsg("Shrine complete: +20 Stamina")}saveGame(false)}}else s.progress=Math.max(0,s.progress-dt*.8);
+  }
+  document.getElementById("shrineHint").style.display=near?"block":"none";
+}
+function updateMonsters(dt){
+  for(const m of monsters){
+    if(!m.active)continue;
+    if(m.dead){m.respawn-=dt;if(m.respawn<=0){m.dead=false;m.hp=m.maxHp;m.x=m.homeX;m.y=m.homeY;m.state="idle"}continue}
+    m.attackCd=Math.max(0,m.attackCd-dt);m.hitFlash=Math.max(0,m.hitFlash-dt);m.comboGap=Math.max(0,m.comboGap-dt);
+    const d=dist(player.x,player.y,m.x,m.y),homeD=dist(m.x,m.y,m.homeX,m.homeY);
+    if(m.windup>0){m.windup-=dt;if(m.windup<=0){if(d<62+m.type.r)hurtPlayer(m.type.damage);if(m.comboLeft>1){m.comboLeft--;m.comboGap=.15+(m.type.hits>2?.04:.1)}else{m.comboLeft=0;m.attackCd=1.0+m.type.hits*.18}}continue}
+    if(m.comboGap>0)continue;
+    if(d<290)m.state="aggro";if(d>520)m.state="return";
+    if(m.state==="aggro"){if(d>58+m.type.r){const nx=(player.x-m.x)/(d||1),ny=(player.y-m.y)/(d||1);m.x+=nx*m.type.speed*dt;m.y+=ny*m.type.speed*dt}else if(m.attackCd<=0){m.comboLeft=m.type.hits;m.windup=m.type.name==="Brute"?.65:.42}}
+    else if(m.state==="return"){if(homeD<8){m.x=m.homeX;m.y=m.homeY;m.state="idle"}else{m.x+=(m.homeX-m.x)/homeD*m.type.speed*.75*dt;m.y+=(m.homeY-m.y)/homeD*m.type.speed*.75*dt}}
+  }
+}
+function update(dt){
+  player.attackCd=Math.max(0,player.attackCd-dt);player.attackTimer=Math.max(0,player.attackTimer-dt);player.comboTimer=Math.max(0,player.comboTimer-dt);if(player.comboTimer<=0)player.attackStage=0;
+  player.rollCd=Math.max(0,player.rollCd-dt);player.rollTimer=Math.max(0,player.rollTimer-dt);player.invuln=Math.max(0,player.invuln-dt);player.shake=Math.max(0,player.shake-dt*25);player.stamina=Math.min(player.maxStamina,player.stamina+18*dt);
+  let sx=input.x,sy=input.y;
+  if(keys["a"])sx-=1;if(keys["d"])sx+=1;if(keys["w"])sy-=1;if(keys["s"])sy+=1;
+  const stickLen=Math.hypot(sx,sy);
+  if(stickLen>.06){
+    if(stickLen>1){sx/=stickLen;sy/=stickLen}
+    const strength=Math.min(1,stickLen);
+    const speed=player.speed*strength*(player.rollTimer>0?2.5:1)*(player.block?.55:1);
+    player.x+=sx*speed*dt;
+    player.y+=sy*speed*dt;
+    const desired=Math.atan2(sy,sx);
+    const turn=Math.atan2(Math.sin(desired-player.heading),Math.cos(desired-player.heading));
+    player.heading+=turn*Math.min(1,dt*12);
+  }
+  player.x=Math.max(60,Math.min(WORLD.w-60,player.x));
+  player.y=Math.max(60,Math.min(WORLD.h-60,player.y));
+  camera.x+=(player.x-camera.x)*Math.min(1,dt*7);
+  camera.y+=(player.y-camera.y)*Math.min(1,dt*7);updateActivation();updateMonsters(dt);updateShrines(dt);updateHud();
+}
+function updateHud(){
+  level.textContent=player.level;heartCount.textContent=player.heartUpgrades;shrineCount.textContent=player.shrinesDone;
+  document.getElementById("equippedWeapon").textContent=player.weapon;
+  document.getElementById("arrowCount").textContent=player.arrows;hpText.textContent=`${Math.ceil(player.hp)} / ${player.maxHp}`;staminaText.textContent=`${Math.ceil(player.stamina)} / ${player.maxStamina}`;xpText.textContent=`${Math.floor(player.xp)} / ${xpNeed()}`;
+  hpFill.style.width=(player.hp/player.maxHp*100)+"%";staminaFill.style.width=(player.stamina/player.maxStamina*100)+"%";xpFill.style.width=(player.xp/xpNeed()*100)+"%";
+  campLabel.textContent="THE WILD LANDS • MONSTER CAMPS";
+}
+function project(wx,wy,height=0){
+  return{x:wx-camera.x+vw/2,y:wy-camera.y+vh/2-height,scale:1};
+}
+function drawWorld(){
+  // Deep natural base
+  const ground=ctx.createLinearGradient(0,0,vw,vh);
+  ground.addColorStop(0,"#45533f");
+  ground.addColorStop(.45,"#39483a");
+  ground.addColorStop(1,"#25352e");
+  ctx.fillStyle=ground;
+  ctx.fillRect(0,0,vw,vh);
+
+  // Huge terrain patches that move with world coordinates.
+  const cell=520;
+  const startGX=Math.floor((camera.x-vw/2)/cell)-2;
+  const endGX=Math.floor((camera.x+vw/2)/cell)+2;
+  const startGY=Math.floor((camera.y-vh/2)/cell)-2;
+  const endGY=Math.floor((camera.y+vh/2)/cell)+2;
+
+  for(let gx=startGX;gx<=endGX;gx++){
+    for(let gy=startGY;gy<=endGY;gy++){
+      const wx=gx*cell,wy=gy*cell;
+      const p=project(wx,wy,0);
+      const seed=Math.abs(Math.sin(gx*12.9898+gy*78.233))*43758.5453;
+      const v=seed-Math.floor(seed);
+      const size=210+v*250;
+      if(v<.24) ctx.fillStyle="rgba(95,77,55,.17)";
+      else if(v<.48) ctx.fillStyle="rgba(91,107,67,.12)";
+      else if(v<.72) ctx.fillStyle="rgba(28,45,39,.14)";
+      else ctx.fillStyle="rgba(117,105,76,.08)";
+      ctx.beginPath();
+      ctx.ellipse(p.x+((v-.5)*150),p.y+((.5-v)*120),size,size*.48,v*2.7,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // Ancient roads.
+  ctx.lineCap="round";
+  for(let road=0;road<5;road++){
+    ctx.strokeStyle=road%2===0?"rgba(113,94,70,.22)":"rgba(78,69,58,.18)";
+    ctx.lineWidth=30+road*6;
+    ctx.beginPath();
+    let first=true;
+    for(let i=-2;i<=12;i++){
+      const wx=Math.floor(camera.x/1400)*1400 + i*430 + road*1900;
+      const wy=camera.y-vh*.9 + i*170 + Math.sin((wx+road*900)*.0018)*380;
+      const p=project(wx,wy,0);
+      if(first){ctx.moveTo(p.x,p.y);first=false}else ctx.lineTo(p.x,p.y);
+    }
+    ctx.stroke();
+  }
+
+  // Mossy stone fragments.
+  const stoneCell=260;
+  const sgx=Math.floor((camera.x-vw/2)/stoneCell)-1;
+  const egy=Math.floor((camera.y+vh/2)/stoneCell)+1;
+  for(let gx=sgx;gx<sgx+Math.ceil(vw/stoneCell)+4;gx++){
+    for(let gy=Math.floor((camera.y-vh/2)/stoneCell)-1;gy<=egy;gy++){
+      const seed=Math.abs(Math.sin(gx*43.17+gy*17.91));
+      if(seed<.70)continue;
+      const p=project(gx*stoneCell+(seed-.5)*100,gy*stoneCell+(seed-.5)*80,0);
+      ctx.fillStyle="rgba(104,108,98,.22)";
+      ctx.beginPath();
+      ctx.ellipse(p.x,p.y,12+seed*12,5+seed*5,seed*2.4,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // Grass texture.
+  const grassCell=95;
+  const gx0=Math.floor((camera.x-vw/2)/grassCell)-1;
+  const gy0=Math.floor((camera.y-vh/2)/grassCell)-1;
+  const gx1=Math.floor((camera.x+vw/2)/grassCell)+1;
+  const gy1=Math.floor((camera.y+vh/2)/grassCell)+1;
+  ctx.lineWidth=1.3;
+  for(let gx=gx0;gx<=gx1;gx++){
+    for(let gy=gy0;gy<=gy1;gy++){
+      const seed=Math.abs(Math.sin(gx*3.17+gy*7.91));
+      if(seed<.36)continue;
+      const p=project(gx*grassCell+(seed-.5)*45,gy*grassCell+(seed-.5)*35,0);
+      ctx.strokeStyle=seed>.7?"rgba(117,131,79,.24)":"rgba(35,66,44,.28)";
+      ctx.beginPath();
+      ctx.moveTo(p.x,p.y+5);
+      ctx.quadraticCurveTo(p.x-3,p.y-4,p.x-1,p.y-11);
+      ctx.moveTo(p.x,p.y+5);
+      ctx.quadraticCurveTo(p.x+4,p.y-3,p.x+6,p.y-9);
+      ctx.stroke();
+    }
+  }
+
+  // Atmospheric shadow banks / fog.
+  const time=performance.now()*.00003;
+  for(let i=0;i<8;i++){
+    const fx=((i*330-camera.x*.012+performance.now()*.004)%(vw+500))-250;
+    const fy=((i*197-camera.y*.007)%(vh+280))-140;
+    const fog=ctx.createRadialGradient(fx,fy,0,fx,fy,190);
+    fog.addColorStop(0,"rgba(202,210,199,.045)");
+    fog.addColorStop(1,"rgba(202,210,199,0)");
+    ctx.fillStyle=fog;
+    ctx.beginPath();
+    ctx.ellipse(fx,fy,220,60,.2,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  // Subtle vignette.
+  const vig=ctx.createRadialGradient(vw/2,vh/2,Math.min(vw,vh)*.2,vw/2,vh/2,Math.max(vw,vh)*.72);
+  vig.addColorStop(0,"rgba(0,0,0,0)");
+  vig.addColorStop(1,"rgba(0,0,0,.28)");
+  ctx.fillStyle=vig;
+  ctx.fillRect(0,0,vw,vh);
+}
+function drawScenery(){
+  const visible=[];
+  for(const s of scenery){
+    const p=project(s.x,s.y,0);
+    if(p.x<-150||p.x>vw+150||p.y<-150||p.y>vh+150)continue;
+    visible.push({s,p});
+  }
+  visible.sort((a,b)=>a.p.y-b.p.y);
+
+  for(let i=0;i<visible.length;i++){
+    const {s,p}=visible[i];
+    const variant=(Math.abs(Math.floor(s.x*.013+s.y*.021))%11);
+
+    if(s.kind==="tree"){
+      const dead=variant===0||variant===4||variant===8;
+      ctx.fillStyle="rgba(0,0,0,.25)";
+      ctx.beginPath();ctx.ellipse(p.x+10,p.y+23,30,10,-.15,0,Math.PI*2);ctx.fill();
+
+      if(dead){
+        ctx.strokeStyle="#3e3028";
+        ctx.lineCap="round";
+        ctx.lineWidth=8;
+        ctx.beginPath();ctx.moveTo(p.x,p.y+18);ctx.lineTo(p.x-2,p.y-34);ctx.stroke();
+        ctx.lineWidth=4;
+        ctx.beginPath();
+        ctx.moveTo(p.x-2,p.y-14);ctx.lineTo(p.x-25,p.y-35);
+        ctx.moveTo(p.x,p.y-27);ctx.lineTo(p.x+24,p.y-49);
+        ctx.moveTo(p.x-13,p.y-29);ctx.lineTo(p.x-31,p.y-50);
+        ctx.moveTo(p.x+12,p.y-40);ctx.lineTo(p.x+29,p.y-62);
+        ctx.stroke();
+      }else{
+        const trunk=ctx.createLinearGradient(p.x-7,0,p.x+7,0);
+        trunk.addColorStop(0,"#3d2b20");trunk.addColorStop(.55,"#66503a");trunk.addColorStop(1,"#2b211b");
+        ctx.fillStyle=trunk;
+        ctx.beginPath();ctx.roundRect(p.x-6,p.y-18,12,41,4);ctx.fill();
+
+        const crown=ctx.createRadialGradient(p.x-10,p.y-38,2,p.x,p.y-31,32);
+        crown.addColorStop(0,"#52694a");crown.addColorStop(.55,"#314b37");crown.addColorStop(1,"#172d25");
+        ctx.fillStyle=crown;
+        for(const [ox,oy,r] of [[-15,-34,21],[11,-36,22],[0,-54,22],[-3,-22,23]]){
+          ctx.beginPath();ctx.arc(p.x+ox,p.y+oy,r,0,Math.PI*2);ctx.fill();
+        }
+      }
+    }else if(s.kind==="rock"){
+      ctx.fillStyle="rgba(0,0,0,.23)";
+      ctx.beginPath();ctx.ellipse(p.x+7,p.y+13,24,8,-.12,0,Math.PI*2);ctx.fill();
+
+      const g=ctx.createLinearGradient(p.x,p.y-20,p.x,p.y+18);
+      g.addColorStop(0,"#8a8e85");g.addColorStop(.48,"#5c625d");g.addColorStop(1,"#343a37");
+      ctx.fillStyle=g;
+      ctx.beginPath();
+      ctx.moveTo(p.x-20,p.y+8);ctx.lineTo(p.x-15,p.y-9);ctx.lineTo(p.x-4,p.y-18);
+      ctx.lineTo(p.x+14,p.y-12);ctx.lineTo(p.x+21,p.y+6);ctx.lineTo(p.x+10,p.y+14);
+      ctx.lineTo(p.x-11,p.y+15);ctx.closePath();ctx.fill();
+
+      if(variant%3===0){
+        ctx.fillStyle="rgba(65,94,57,.35)";
+        ctx.beginPath();ctx.ellipse(p.x-4,p.y-5,9,4,-.5,0,Math.PI*2);ctx.fill();
+      }
+    }else{
+      // Larger ruin pieces, arches, broken pillars.
+      ctx.fillStyle="rgba(0,0,0,.24)";
+      ctx.beginPath();ctx.ellipse(p.x+10,p.y+18,30,9,0,0,Math.PI*2);ctx.fill();
+
+      if(variant%3===0){
+        ctx.fillStyle="#66675f";
+        ctx.fillRect(p.x-9,p.y-48,18,61);
+        ctx.fillStyle="#83847b";
+        ctx.fillRect(p.x-14,p.y-53,28,8);
+        ctx.strokeStyle="rgba(32,31,29,.45)";ctx.lineWidth=2;
+        ctx.beginPath();ctx.moveTo(p.x-4,p.y-44);ctx.lineTo(p.x+3,p.y-17);ctx.lineTo(p.x-2,p.y+7);ctx.stroke();
+      }else if(variant%3===1){
+        ctx.strokeStyle="#717269";ctx.lineWidth=10;
+        ctx.beginPath();ctx.arc(p.x,p.y-13,25,Math.PI,Math.PI*2);ctx.stroke();
+        ctx.fillStyle="#66675f";ctx.fillRect(p.x-30,p.y-15,10,35);ctx.fillRect(p.x+20,p.y-15,10,35);
+      }else{
+        ctx.fillStyle="#6e6f67";
+        ctx.beginPath();
+        ctx.moveTo(p.x-26,p.y+15);ctx.lineTo(p.x-20,p.y-24);ctx.lineTo(p.x+8,p.y-37);
+        ctx.lineTo(p.x+25,p.y-7);ctx.lineTo(p.x+19,p.y+16);ctx.closePath();ctx.fill();
+      }
+    }
+  }
+}
+function drawCamps(){
+  for(const c of camps){
+    if(dist(player.x,player.y,c.x,c.y)>1500)continue;
+    const p=project(c.x,c.y,0);
+
+    ctx.fillStyle="rgba(75,57,42,.18)";
+    ctx.beginPath();ctx.arc(p.x,p.y,110,0,Math.PI*2);ctx.fill();
+
+    ctx.strokeStyle="rgba(113,110,99,.75)";
+    ctx.lineWidth=7;
+    for(let n=0;n<7;n++){
+      const a=n*Math.PI*2/7;
+      const rr=58+(n%2)*18;
+      ctx.beginPath();
+      ctx.moveTo(p.x+Math.cos(a)*rr,p.y+Math.sin(a)*rr);
+      ctx.lineTo(p.x+Math.cos(a)*rr,p.y+Math.sin(a)*rr-20-(n%3)*8);
+      ctx.stroke();
+    }
+
+    // Fire indicates an occupied monster camp.
+    const fire=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,22);
+    fire.addColorStop(0,"rgba(255,220,110,.95)");
+    fire.addColorStop(.45,"rgba(255,115,38,.85)");
+    fire.addColorStop(1,"rgba(255,80,20,0)");
+    ctx.fillStyle=fire;
+    ctx.beginPath();ctx.arc(p.x,p.y,22,0,Math.PI*2);ctx.fill();
+  }
+}
+function drawShrines(){
+  for(const s of shrines){
+    if(s.done||dist(player.x,player.y,s.x,s.y)>1400)continue;
+    const p=project(s.x,s.y,0);
+    const pulse=1+Math.sin(performance.now()*.004+s.index)*.06;
+
+    ctx.fillStyle="rgba(46,71,76,.18)";
+    ctx.beginPath();ctx.arc(p.x,p.y,52*pulse,0,Math.PI*2);ctx.fill();
+
+    ctx.strokeStyle="rgba(101,211,225,.75)";
+    ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.arc(p.x,p.y,46*pulse,0,Math.PI*2);ctx.stroke();
+
+    ctx.fillStyle="#668b8c";
+    ctx.beginPath();
+    ctx.moveTo(p.x,p.y-34);ctx.lineTo(p.x+12,p.y+19);ctx.lineTo(p.x-12,p.y+19);ctx.closePath();ctx.fill();
+  }
+}
+function drawMonster(m){
+  if(!m.active||m.dead)return;
+  const p=project(m.x,m.y,0);
+  if(p.x<-100||p.x>vw+100||p.y<-100||p.y>vh+100)return;
+
+  const r=m.type.r;
+  if(m.windup>0){
+    const pulse=1+Math.sin(performance.now()*.02)*.05;
+    ctx.fillStyle="rgba(255,70,40,.09)";
+    ctx.strokeStyle="rgba(255,80,45,.9)";
+    ctx.lineWidth=4;
+    ctx.beginPath();ctx.arc(p.x,p.y,50*pulse,0,Math.PI*2);ctx.fill();ctx.stroke();
+  }
+
+  ctx.fillStyle="rgba(0,0,0,.26)";
+  ctx.beginPath();ctx.ellipse(p.x+6,p.y+18,r*1.05,r*.46,0,0,Math.PI*2);ctx.fill();
+
+  ctx.save();
+  ctx.translate(p.x,p.y);
+
+  // Body / armor
+  const isHeavy=["Iron Knight","Brute","Royal Champion"].includes(m.type.name);
+  ctx.fillStyle=m.hitFlash>0?"#fff":m.type.color;
+  ctx.beginPath();ctx.roundRect(-r*.65,-r*.65,r*1.3,r*1.45,isHeavy?5:8);ctx.fill();
+
+  // Head
+  ctx.fillStyle=m.type.name==="Boklin"?"#8fa967":
+                m.type.name==="Forest Fang"?"#696f70":
+                "#cfa77d";
+  if(m.type.name==="Forest Fang"){
+    ctx.beginPath();ctx.ellipse(0,-r*.72,r*.55,r*.42,0,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-8,-r*.95);ctx.lineTo(-3,-r*1.28);ctx.lineTo(1,-r*.95);
+    ctx.moveTo(8,-r*.95);ctx.lineTo(3,-r*1.28);ctx.lineTo(-1,-r*.95);
+    ctx.fill();
+  }else{
+    ctx.beginPath();ctx.arc(0,-r*.8,Math.max(7,r*.38),0,Math.PI*2);ctx.fill();
+  }
+
+  // Weapon swing
+  const swing=m.windup>0 ? 1-m.windup/(m.type.name==="Brute"?.65:.42) : 0;
+  const weaponLen=isHeavy?40:31;
+  ctx.save();
+  ctx.translate(r*.55,-r*.15);
+  ctx.rotate(-1+swing*2.15);
+  ctx.strokeStyle=isHeavy?"#d7dce0":"#cfd5d7";
+  ctx.lineWidth=isHeavy?6:4;
+  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-weaponLen);ctx.stroke();
+  ctx.restore();
+
+  if(m.type.name==="Dual Raider"){
+    ctx.save();
+    ctx.translate(-r*.55,-r*.15);
+    ctx.rotate(1-swing*2.15);
+    ctx.strokeStyle="#cfd5d7";ctx.lineWidth=4;
+    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-29);ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.restore();
+
+  // HP bar + name
+  ctx.fillStyle="rgba(0,0,0,.68)";
+  ctx.fillRect(p.x-28,p.y-r-30,56,6);
+  ctx.fillStyle="#d34e54";
+  ctx.fillRect(p.x-27,p.y-r-29,54*Math.max(0,m.hp/m.maxHp),4);
+  ctx.font="bold 11px Arial";
+  ctx.textAlign="center";
+  ctx.fillStyle="#fff";
+  ctx.fillText(m.type.name,p.x,p.y-r-37);
+
+  if(m.comboLeft>1 || m.comboGap>0){
+    ctx.fillStyle="#ffd76e";
+    ctx.font="bold 10px Arial";
+    ctx.fillText("COMBO",p.x,p.y-r-49);
+  }
+}
+function drawPlayer(){
+  const p={x:vw/2,y:vh/2};
+  ctx.fillStyle="rgba(0,0,0,.28)";ctx.beginPath();ctx.ellipse(p.x+6,p.y+18,24,8,0,0,Math.PI*2);ctx.fill();
+  if(player.block){ctx.strokeStyle="rgba(110,210,255,.9)";ctx.lineWidth=4;ctx.beginPath();ctx.arc(p.x,p.y,35,0,Math.PI*2);ctx.stroke()}
+  if(player.attackTimer>0){ctx.strokeStyle="rgba(255,245,190,.95)";ctx.lineWidth=8;ctx.beginPath();ctx.arc(p.x,p.y,70,player.heading-1.4,player.heading+1.4);ctx.stroke()}
+  ctx.save();ctx.translate(p.x,p.y);ctx.rotate(player.heading+Math.PI/2);
+  ctx.fillStyle="#1b2028";ctx.beginPath();ctx.roundRect(-14,-8,28,34,9);ctx.fill();
+  ctx.fillStyle="#a42131";ctx.beginPath();ctx.moveTo(-12,-5);ctx.lineTo(-29,5);ctx.lineTo(-13,10);ctx.closePath();ctx.fill();
+  ctx.fillStyle="#e5b88d";ctx.beginPath();ctx.arc(0,-18,11,0,Math.PI*2);ctx.fill();ctx.fillStyle="#28201c";ctx.beginPath();ctx.arc(0,-22,11,Math.PI,Math.PI*2);ctx.fill();
+  if(player.weapon.includes("Bow")){ctx.strokeStyle="#9a683d";ctx.lineWidth=4;ctx.beginPath();ctx.arc(17,-5,18,-1.2,1.2);ctx.stroke()}
+  else{ctx.strokeStyle="#cfd7dd";ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(13,0);ctx.lineTo(13,-38);ctx.stroke()}
+  ctx.restore();
+}
+function drawPlayer(){
+  const x=vw/2,y=vh*.76;ctx.fillStyle="rgba(0,0,0,.3)";ctx.beginPath();ctx.ellipse(x+8,y+23,28,9,0,0,Math.PI*2);ctx.fill();if(player.block){ctx.strokeStyle="rgba(110,210,255,.9)";ctx.lineWidth=4;ctx.beginPath();ctx.arc(x,y-18,40,0,Math.PI*2);ctx.stroke()}if(player.attackTimer>0){ctx.strokeStyle="rgba(255,245,190,.95)";ctx.lineWidth=9;ctx.beginPath();ctx.arc(x,y-20,76,-1.4,1.35);ctx.stroke()}ctx.fillStyle="#1b2028";ctx.beginPath();ctx.roundRect(x-15,y-45,30,50,9);ctx.fill();ctx.fillStyle="#a42131";ctx.beginPath();ctx.moveTo(x-13,y-41);ctx.lineTo(x-34,y-29);ctx.lineTo(x-14,y-24);ctx.closePath();ctx.fill();ctx.fillStyle="#e5b88d";ctx.beginPath();ctx.arc(x,y-58,12,0,Math.PI*2);ctx.fill();ctx.fillStyle="#28201c";ctx.beginPath();ctx.arc(x,y-62,12,Math.PI,Math.PI*2);ctx.fill();if(player.weapon.includes("Bow")){
+    ctx.strokeStyle="#9a683d";ctx.lineWidth=4;ctx.beginPath();ctx.arc(x+20,y-42,22,-1.25,1.25);ctx.stroke();
+    ctx.strokeStyle="#ddd";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x+27,y-62);ctx.lineTo(x+27,y-22);ctx.stroke();
+  }else{
+    ctx.strokeStyle="#cfd7dd";ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(x+15,y-35);ctx.lineTo(x+26,y-75);ctx.stroke();
+  }
+}
+function draw(){ctx.clearRect(0,0,vw,vh);ctx.save();if(player.shake>0)ctx.translate((Math.random()-.5)*player.shake,(Math.random()-.5)*player.shake);drawWorld();drawScenery();drawCamps();drawShrines();
+  const active=monsters.filter(m=>m.active&&!m.dead).sort((a,b)=>a.y-b.y);
+  for(const m of active)drawMonster(m);
+  drawPlayer();ctx.restore()}
+let last=performance.now();function loop(now){const dt=Math.min(.033,(now-last)/1000);last=now;update(dt);draw();requestAnimationFrame(loop)}updateActivation();updateHud();requestAnimationFrame(loop);addEventListener("error",e=>showMsg("Game error: "+e.message));
+})();
+</script>
+</body>
+</html>
